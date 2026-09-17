@@ -1,1 +1,27 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clipper AI</title>
+<style>
+body{margin:0;background:#090b10;color:#f5f7fa;font:14px Arial,sans-serif}.wrap{max-width:1050px;margin:auto;padding:28px}.card{background:#11151d;border:1px solid #293140;border-radius:15px;padding:20px;margin-bottom:18px}.brand{font-size:27px;font-weight:900;margin-bottom:20px}.drop{border:2px dashed #3a4352;border-radius:12px;padding:35px;text-align:center;cursor:pointer}.drop input{display:none}.hidden{display:none}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px}video{width:100%;background:#000;border-radius:11px;margin-top:14px;max-height:500px}.cands{display:grid;gap:10px;margin-top:14px}.cand{display:grid;grid-template-columns:50px 1fr auto;gap:10px;background:#181e27;padding:12px;border-radius:10px}.num{font-size:20px;font-weight:bold}.cand h3{margin:0 0 5px;font-size:14px}.muted,.status{color:#929bab;font-size:12px}.preview{aspect-ratio:9/16;background:#05070a;border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center}.form{display:grid;gap:10px;margin-top:14px}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.input,select{width:100%;padding:11px;background:#181e27;border:1px solid #323b4b;color:#fff;border-radius:9px}.btn{padding:11px 15px;border:0;border-radius:9px;font-weight:bold;cursor:pointer}.primary{background:#fff;color:#090b10}.secondary{background:#222936;color:#fff}.bar{height:7px;background:#222936;border-radius:9px;overflow:hidden;margin-top:12px}.bar i{display:block;height:100%;width:0;background:#fff}.download{display:block;margin-top:10px;text-align:center;text-decoration:none}@media(max-width:800px){.grid{grid-template-columns:1fr}.wrap{padding:15px}}
+</style></head>
+<body><div class="wrap">
+<div class="brand">🎬 CLIPPER AI</div>
+<div class="card"><b>1. Upload video</b><div class="drop" id="drop">📤<br><strong>Klik untuk memilih video</strong><br><span class="muted">MP4, MOV, WebM, MKV</span><input id="file" type="file" accept="video/*"></div><div id="uploaded" class="status"></div></div>
+<div id="work" class="hidden"><div class="grid">
+<section class="card"><b>2. Cari momen</b><video id="video" controls></video><button class="btn primary" id="analyze" style="width:100%;margin-top:12px">🤖 Cari Momen Menarik</button><div id="cands" class="cands"></div></section>
+<aside class="card"><b>3. Export</b><div class="preview" id="pv">Pilih kandidat clip</div>
+<div class="form"><div class="two"><div><label>Mulai</label><input id="start" class="input" type="number" value="0" step=".1"></div><div><label>Selesai</label><input id="end" class="input" type="number" value="30" step=".1"></div></div>
+<div><label>Format</label><select id="ratio"><option value="9:16">9:16 Vertical</option><option value="1:1">1:1 Square</option><option value="16:9">16:9 Landscape</option></select></div>
+<div><label>Nama file</label><input id="name" class="input" value="clip_01"></div>
+<button id="export" class="btn primary">⬇️ EXPORT MP4</button><div class="bar"><i id="bar"></i></div><div id="status" class="status"></div><a id="dl" class="btn secondary download hidden" href="#">Download MP4</a></div></aside>
+</div></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);let filename=null;
+$("drop").onclick=()=>$("file").click();
+$("file").onchange=async e=>{let f=e.target.files[0];if(!f)return;let fd=new FormData();fd.append("video",f);$("uploaded").textContent="Mengupload…";let r=await fetch("/upload",{method:"POST",body:fd});let d=await r.json();if(!r.ok)return alert(d.error);filename=d.filename;$("video").src=URL.createObjectURL(f);$("work").classList.remove("hidden");$("uploaded").textContent="✓ "+f.name};
+$("analyze").onclick=async()=>{let r=await fetch("/analyze",{method:"POST"}),d=await r.json();$("cands").innerHTML=d.candidates.map((x,i)=>`<div class="cand"><div class="num">0${i+1}</div><div><h3>${x.title}</h3><div class="muted">${x.start}s – ${x.end}s • ${x.reason}</div></div><div><b>${x.score}%</b><br><button class="btn secondary" onclick="pick(${x.start},${x.end},${i})">Pilih</button></div></div>`).join("")};
+window.pick=(s,e,i)=>{$("start").value=s;$("end").value=e;$("pv").innerHTML=`<div><b>CLIP 0${i+1}</b><br>${s}s – ${e}s<br><span class="muted">9:16</span></div>`;$("video").currentTime=s};
+$("export").onclick=async()=>{if(!filename)return alert("Upload video dulu");$("status").textContent="Merender MP4 dengan FFmpeg…";$("bar").style.width="30%";let r=await fetch("/clip",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename,start:$("start").value,end:$("end").value,ratio:$("ratio").value,name:$("name").value})});let d=await r.json();if(!r.ok){$("status").textContent=d.error;$("bar").style.width="0";return}$("bar").style.width="100%";$("status").textContent="✓ Selesai";$("dl").href=d.download;$("dl").classList.remove("hidden")};
+</script></body></html>
 
