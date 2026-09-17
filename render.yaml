@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: clipper-ai
+    runtime: docker
+    plan: free
+    healthCheckPath: /
