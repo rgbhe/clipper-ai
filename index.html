@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Clipper AI — Browser Video Clipper</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#090b10;color:#f5f7fa;font:14px Arial,sans-serif}.wrap{max-width:1100px;margin:auto;padding:28px}.brand{font-size:30px;font-weight:900;margin-bottom:8px}.sub{color:#929bab;margin-bottom:22px}.card{background:#11151d;border:1px solid #293140;border-radius:16px;padding:20px;margin-bottom:18px}.drop{border:2px dashed #3a4352;border-radius:14px;padding:38px;text-align:center;cursor:pointer;transition:.2s}.drop:hover{border-color:#fff;background:#151a22}.drop input{display:none}.hidden{display:none!important}.grid{display:grid;grid-template-columns:1.25fr .75fr;gap:18px}video{width:100%;background:#000;border-radius:12px;margin-top:14px;max-height:560px}.cands{display:grid;gap:10px;margin-top:14px}.cand{display:grid;grid-template-columns:48px 1fr auto;gap:10px;background:#181e27;padding:12px;border-radius:11px;align-items:center}.num{font-size:20px;font-weight:bold}.cand h3{margin:0 0 5px;font-size:14px}.muted,.status{color:#929bab;font-size:12px}.preview{aspect-ratio:9/16;max-height:330px;background:#05070a;border-radius:12px;display:flex;align-items:center;justify-content:center;text-align:center;margin-top:12px}.form{display:grid;gap:10px;margin-top:14px}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.input,select{width:100%;padding:11px;background:#181e27;border:1px solid #323b4b;color:#fff;border-radius:9px;margin-top:5px}.btn{padding:11px 15px;border:0;border-radius:9px;font-weight:bold;cursor:pointer}.primary{background:#fff;color:#090b10}.secondary{background:#222936;color:#fff;text-decoration:none;text-align:center}.btn:disabled{opacity:.45;cursor:not-allowed}.bar{height:7px;background:#222936;border-radius:9px;overflow:hidden;margin-top:12px}.bar i{display:block;height:100%;width:0;background:#fff;transition:width .2s}.notice{padding:11px 13px;background:#181e27;border-radius:10px;color:#c7ced9;font-size:12px;line-height:1.5;margin-top:12px}.toprow{display:flex;justify-content:space-between;gap:12px;align-items:center}.badge{font-size:11px;border:1px solid #3a4352;border-radius:99px;padding:5px 9px;color:#c7ced9}@media(max-width:800px){.grid{grid-template-columns:1fr}.wrap{padding:15px}.toprow{align-items:flex-start;flex-direction:column}.preview{max-height:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="toprow"><div><div class="brand">🎬 CLIPPER AI</div><div class="sub">Potong video menjadi short clip langsung di browser.</div></div><div class="badge">GitHub Pages • No server upload</div></div>
+
+  <div class="card">
+    <b>1. Upload video</b>
+    <div class="drop" id="drop">📤<br><strong>Klik untuk memilih video</strong><br><span class="muted">MP4, WebM, MOV, MKV • video diproses di perangkat kamu</span><input id="file" type="file" accept="video/*"></div>
+    <div id="uploaded" class="status"></div>
+    <div class="notice">ℹ️ Versi ini tidak mengupload video ke server. File diproses lokal menggunakan FFmpeg WebAssembly di browser.</div>
+  </div>
+
+  <div id="work" class="hidden">
+    <div class="grid">
+      <section class="card">
+        <b>2. Cari momen & pilih bagian</b>
+        <video id="video" controls></video>
+        <button class="btn primary" id="analyze" style="width:100%;margin-top:12px">🤖 Cari Momen Menarik</button>
+        <div id="cands" class="cands"></div>
+        <div class="notice">Demo saat ini menampilkan beberapa kandidat contoh. Tombol export sudah benar-benar memproses video; AI transcript/highlight otomatis bisa kita sambungkan pada tahap berikutnya.</div>
+      </section>
+
+      <aside class="card">
+        <b>3. Export Clip</b>
+        <div class="preview" id="pv">Pilih kandidat clip<br><span class="muted">atau isi waktu secara manual</span></div>
+        <div class="form">
+          <div class="two">
+            <div><label>Mulai (detik)</label><input id="start" class="input" type="number" value="0" min="0" step="0.1"></div>
+            <div><label>Selesai (detik)</label><input id="end" class="input" type="number" value="30" min="0.1" step="0.1"></div>
+          </div>
+          <div><label>Format</label><select id="ratio"><option value="9:16">9:16 Vertical — Shorts/Reels/TikTok</option><option value="1:1">1:1 Square</option><option value="16:9">16:9 Landscape — YouTube</option></select></div>
+          <div><label>Nama file</label><input id="name" class="input" value="clip_01" maxlength="50"></div>
+          <button id="export" class="btn primary">⬇️ EXPORT MP4</button>
+          <div class="bar"><i id="bar"></i></div>
+          <div id="status" class="status">FFmpeg akan dimuat saat pertama kali export.</div>
+          <a id="dl" class="btn secondary download hidden" href="#" download>Download MP4</a>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm';
+import { fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/+esm';
+
+const $=id=>document.getElementById(id);
+let sourceFile=null, ffmpeg=null, loaded=false;
+
+$("drop").onclick=()=>$("file").click();
+$("file").onchange=e=>loadVideo(e.target.files[0]);
+
+async function loadVideo(file){
+  if(!file)return;
+  sourceFile=file;
+  const url=URL.createObjectURL(file);
+  $("video").src=url;
+  $("work").classList.remove("hidden");
+  $("uploaded").textContent="✓ "+file.name+" • "+formatBytes(file.size);
+  $("status").textContent="Video siap diproses.";
+  $("dl").classList.add("hidden");
+}
+
+function formatBytes(bytes){
+  if(bytes<1024*1024)return (bytes/1024).toFixed(0)+" KB";
+  return (bytes/1024/1024).toFixed(1)+" MB";
+}
+
+$("analyze").onclick=()=>{
+  const duration=$("video").duration||420;
+  const presets=[
+    [12,58,"Momen dengan hook kuat",96,"Pembuka yang menarik perhatian"],
+    [91,140,"Cerita paling menarik",92,"Bagian cerita yang punya alur kuat"],
+    [205,252,"Tips yang actionable",89,"Bagian yang berisi tips praktis"],
+    [318,365,"Momen paling menghibur",86,"Bagian yang berpotensi menarik penonton"]
+  ];
+  const candidates=presets.map(x=>({start:Math.min(x[0],Math.max(0,duration-1)),end:Math.min(x[1],duration),title:x[2],score:x[3],reason:x[4]})).filter(x=>x.end>x.start);
+  $("cands").innerHTML=candidates.length?candidates.map((x,i)=>`<div class="cand"><div class="num">0${i+1}</div><div><h3>${x.title}</h3><div class="muted">${x.start.toFixed(1)}s – ${x.end.toFixed(1)}s • ${x.reason}</div></div><div><b>${x.score}%</b><br><button class="btn secondary" onclick="pick(${x.start},${x.end},${i})">Pilih</button></div></div>`).join(""):"<div class='status'>Video terlalu pendek untuk kandidat demo.</div>";
+};
+
+window.pick=(s,e,i)=>{
+  $("start").value=s.toFixed(1);$("end").value=e.toFixed(1);
+  $("pv").innerHTML=`<div><b>CLIP 0${i+1}</b><br>${s.toFixed(1)}s – ${e.toFixed(1)}s<br><span class="muted">Pilih rasio di bawah</span></div>`;
+  $("video").currentTime=s;
+};
+
+async function initFFmpeg(){
+  if(loaded)return;
+  $("status").textContent="Menyiapkan FFmpeg di browser… pertama kali bisa beberapa saat.";
+  $("bar").style.width="8%";
+  ffmpeg=new FFmpeg();
+  ffmpeg.on("progress",({progress})=>{
+    const pct=Math.max(8,Math.min(98,Math.round(progress*100)));
+    $("bar").style.width=pct+"%";
+    $("status").textContent="Merender MP4… "+pct+"%";
+  });
+  await ffmpeg.load({
+    coreURL:'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.js',
+    wasmURL:'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd/ffmpeg-core.wasm'
+  });
+  loaded=true;
+}
+
+$("export").onclick=async()=>{
+  if(!sourceFile)return alert("Upload video dulu.");
+  const start=parseFloat($("start").value), end=parseFloat($("end").value);
+  if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start){alert("Waktu mulai/selesai tidak valid.");return;}
+  if(start<0){alert("Waktu mulai tidak boleh negatif.");return;}
+  if($("video").duration && end>$("video").duration+0.1){alert("Waktu selesai melebihi durasi video.");return;}
+  const ratio=$("ratio").value;
+  const name=($("name").value||"clip_01").replace(/[^a-zA-Z0-9_-]/g,"_");
+  $("export").disabled=true;$("dl").classList.add("hidden");
+  try{
+    await initFFmpeg();
+    const inputName='input_'+Date.now()+getExt(sourceFile.name);
+    const outputName=name+'.mp4';
+    $("status").textContent="Membaca video…";
+    await ffmpeg.writeFile(inputName,await fetchFile(sourceFile));
+    let vf;
+    if(ratio==='9:16') vf="scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920";
+    else if(ratio==='1:1') vf="scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080";
+    else vf="scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080";
+    await ffmpeg.exec(['-ss',String(start),'-i',inputName,'-t',String(end-start),'-vf',vf,'-c:v','libx264','-preset','ultrafast','-crf','28','-c:a','aac','-b:a','128k','-movflags','+faststart',outputName]);
+    const data=await ffmpeg.readFile(outputName);
+    const blob=new Blob([data.buffer],{type:'video/mp4'});
+    const url=URL.createObjectURL(blob);
+    $("dl").href=url;$("dl").download=outputName;$("dl").classList.remove("hidden");
+    $("bar").style.width="100%";$("status").textContent="✓ Selesai! MP4 siap didownload.";
+    try{await ffmpeg.deleteFile(inputName);await ffmpeg.deleteFile(outputName);}catch(e){}
+  }catch(err){
+    console.error(err);
+    $("bar").style.width="0%";
+    $("status").textContent="Gagal memproses video. Coba video MP4 yang lebih pendek/kecil.";
+    alert("Export gagal. Untuk versi browser, coba MP4 yang lebih pendek atau ukuran file lebih kecil.");
+  }finally{$("export").disabled=false;}
+};
+
+function getExt(name){const m=name.toLowerCase().match(/\.[a-z0-9]+$/);return m?m[0]:'.mp4';}
+</script>
+</body>
+</html>
